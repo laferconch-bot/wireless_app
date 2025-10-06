@@ -193,8 +193,6 @@ class MultiLineChartWidget extends StatelessWidget {
                                     ))
                                 .toList(),
                           ),
-                          swapAnimationDuration: const Duration(milliseconds: 250),
-                          swapAnimationCurve: Curves.easeInOut,
                         ),
                       ),
                     ),

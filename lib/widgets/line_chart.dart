@@ -187,8 +187,6 @@ class LineChartWidget extends StatelessWidget {
                               ),
                             ],
                           ),
-                          swapAnimationDuration: const Duration(milliseconds: 250),
-                          swapAnimationCurve: Curves.easeInOut,
                         ),
                       ),
                     ),
