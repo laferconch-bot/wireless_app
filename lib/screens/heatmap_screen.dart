@@ -32,16 +32,18 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   double minValue = 0.0;
   double maxValue = 0.0;
   String? gltfModelPath;
-  // When true, the heatmap will not attempt to load any data
-  final bool heatmapDisabled = true;
+  // Heatmap is enabled by default
+  final bool heatmapDisabled = false;
 
   @override
   void initState() {
     super.initState();
     if (heatmapDisabled) {
-      // Do not attempt to load data; ensure UI is not stuck on a spinner
-      isLoading = false;
-      gridData = [];
+      // If ever disabled, show a non-loading placeholder
+      setState(() {
+        isLoading = false;
+        gridData = [];
+      });
       return;
     }
     _loadData();
@@ -61,6 +63,14 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           isLoading = false;
         });
         _updateGridAndValues();
+      } else {
+        // Ensure spinner clears even when dataset is empty
+        setState(() {
+          startTime = null;
+          endTime = null;
+          gridData = [];
+          isLoading = false;
+        });
       }
     } catch (e) {
       print('Error loading data: $e');
@@ -175,16 +185,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           ),
         ],
       ),
-      body: heatmapDisabled
-          ? Center(
-              child: Text(
-                'Heatmap is disabled.',
-                style: TextStyle(
-                  color: isDark ? Colors.white70 : Colors.black87,
-                ),
-              ),
-            )
-          : isLoading
+      body: isLoading
               ? const Center(child: CircularProgressIndicator())
               : Padding(
               padding: const EdgeInsets.all(16.0),
