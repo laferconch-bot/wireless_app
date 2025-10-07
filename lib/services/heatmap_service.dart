@@ -11,12 +11,16 @@ class HeatmapPoint {
   final int y;
   final DateTime t;
   final Map<String, double> metrics;
+  final double? lat; // optional
+  final double? lon; // optional
 
   HeatmapPoint({
     required this.x,
     required this.y,
     required this.t,
     required this.metrics,
+    this.lat,
+    this.lon,
   });
 }
 
@@ -166,6 +170,8 @@ class HeatmapService {
         y: latToY[r.lat]!,
         t: r.t,
         metrics: r.metrics,
+        lat: r.lat,
+        lon: r.lon,
       )).toList();
     }
 
@@ -175,6 +181,8 @@ class HeatmapService {
       y: r.y!,
       t: r.t,
       metrics: r.metrics,
+      lat: r.lat,
+      lon: r.lon,
     )).toList();
   }
 
@@ -235,6 +243,91 @@ class HeatmapService {
     }
 
     return grid;
+  }
+
+  // Build a uniform, seamless grid using lat/lon by nearest-neighbor binning
+  List<List<double>> createUniformGridFromLatLon({
+    required String metric,
+    required DateTime start,
+    required DateTime end,
+    int? targetCols,
+    int? targetRows,
+  }) {
+    if (points.isEmpty) {
+      return [ [ double.nan ] ];
+    }
+
+    final candidates = points.where((p) =>
+      p.lat != null && p.lon != null &&
+      (p.t.isAfter(start) || p.t.isAtSameMomentAs(start)) &&
+      (p.t.isBefore(end) || p.t.isAtSameMomentAs(end))
+    ).toList();
+
+    if (candidates.isEmpty) {
+      // Fallback to index-based grid
+      return createGrid(metric: metric, start: start, end: end);
+    }
+
+    // Determine resolution
+    final uniqueLats = candidates.map((p) => p.lat!).toSet().toList()..sort();
+    final uniqueLons = candidates.map((p) => p.lon!).toSet().toList()..sort();
+    final int cols = targetCols ?? uniqueLons.length;
+    final int rows = targetRows ?? uniqueLats.length;
+    if (cols <= 0 || rows <= 0) {
+      return [ [ double.nan ] ];
+    }
+
+    final double minLat = uniqueLats.first;
+    final double maxLat = uniqueLats.last;
+    final double minLon = uniqueLons.first;
+    final double maxLon = uniqueLons.last;
+
+    // Precompute candidate values and positions
+    final List<_Sample> samples = [];
+    for (final p in candidates) {
+      final value = _metricValue(p, metric);
+      if (value.isFinite) {
+        samples.add(_Sample(p.lat!, p.lon!, value));
+      }
+    }
+    if (samples.isEmpty) {
+      return [ [ double.nan ] ];
+    }
+
+    // Axis arrays (inclusive endpoints)
+    List<double> latAxis = List.generate(rows, (r) => rows == 1 ? minLat : minLat + (maxLat - minLat) * r / (rows - 1));
+    List<double> lonAxis = List.generate(cols, (c) => cols == 1 ? minLon : minLon + (maxLon - minLon) * c / (cols - 1));
+
+    // Fill grid using nearest neighbor
+    final grid = List.generate(rows, (_) => List.filled(cols, double.nan));
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final lat = latAxis[r];
+        final lon = lonAxis[c];
+        double bestDist = double.infinity;
+        double bestVal = double.nan;
+        for (final s in samples) {
+          final double dLat = s.lat - lat;
+          final double dLon = s.lon - lon;
+          final double dist2 = dLat * dLat + dLon * dLon;
+          if (dist2 < bestDist) {
+            bestDist = dist2;
+            bestVal = s.value;
+          }
+        }
+        grid[r][c] = bestVal;
+      }
+    }
+    return grid;
+  }
+
+  double _metricValue(HeatmapPoint p, String metric) {
+    if (metric == 'All') {
+      final values = p.metrics.values.where((v) => v.isFinite).toList();
+      if (values.isEmpty) return double.nan;
+      return values.reduce((a, b) => a + b) / values.length;
+    }
+    return p.metrics[metric] ?? double.nan;
   }
 }
 

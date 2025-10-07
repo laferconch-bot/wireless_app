@@ -152,10 +152,14 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       return;
     }
 
-    final newGrid = heatmapService.createGrid(
+    // Prefer lat/lon seamless grid if available
+    final newGrid = heatmapService.createUniformGridFromLatLon(
       metric: currentMetric,
       start: startTime!,
       end: endTime!,
+      // Optional: upsample if only a few unique coords
+      targetCols: null,
+      targetRows: null,
     );
 
     final allValues = newGrid.expand((row) => row).where((v) => !v.isNaN).toList();
@@ -192,7 +196,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       // If asset: read as string; if file later, read the file contents
       final csvContent = await DefaultAssetBundle.of(context).loadString(csvKeySource);
       final key = HeatmapCacheService.buildKey(csvContent: csvContent, metric: currentMetric);
-      final exists = await HeatmapCacheService.existsPng(key);
+      final settings = context.read<AppSettings>();
+      final exists = await HeatmapCacheService.existsPng(key, basePath: settings.saveDirectory);
       if (!exists) {
         final img = await renderHeatmapImage(
           grid: gridData!,
@@ -201,7 +206,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           maxValue: maxValue,
           cellSize: 24,
         );
-        await HeatmapCacheService.writePng(key, img);
+        await HeatmapCacheService.writePng(key, img, basePath: settings.saveDirectory);
       }
     } catch (_) {
       // Ignore caching errors silently for now
@@ -234,7 +239,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     // Ensure PNG exists
     final csv = await DefaultAssetBundle.of(context).loadString('assets/simulated_soil_square.csv');
     final key = HeatmapCacheService.buildKey(csvContent: csv, metric: currentMetric);
-    if (!await HeatmapCacheService.existsPng(key)) {
+    final settings = context.read<AppSettings>();
+    if (!await HeatmapCacheService.existsPng(key, basePath: settings.saveDirectory)) {
       if (gridData != null && gridData!.isNotEmpty) {
         final img = await renderHeatmapImage(
           grid: gridData!,
@@ -243,11 +249,11 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           maxValue: maxValue,
           cellSize: 24,
         );
-        await HeatmapCacheService.writePng(key, img);
+        await HeatmapCacheService.writePng(key, img, basePath: settings.saveDirectory);
       }
     }
     // Read PNG and embed in glTF JSON (data URIs)
-    final pngFile = await HeatmapCacheService.getPngFile(key);
+    final pngFile = await HeatmapCacheService.getPngFile(key, basePath: settings.saveDirectory);
     final bytes = await pngFile.readAsBytes();
     final json = GltfService.buildTexturedPlaneGltfJson(bytes);
     return GltfService.gltfJsonToDataUri(json);
