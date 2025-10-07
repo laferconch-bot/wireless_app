@@ -24,7 +24,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     'K',
     'All'
   ];
-  String currentMetric = 'pH';
+  String currentMetric = 'All';
   DateTime? startTime;
   DateTime? endTime;
   bool is3DView = false;
@@ -49,13 +49,27 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       if (!mounted) return;
 
       if (points.isNotEmpty) {
+        // Compute full available time range from CSV
+        final DateTime minT = points.map((p) => p.t).reduce((a, b) => a.isBefore(b) ? a : b);
+        final DateTime maxT = points.map((p) => p.t).reduce((a, b) => a.isAfter(b) ? a : b);
+
         setState(() {
-          // Set initial timeline to a recent, tighter window for better visibility
-          startTime = points.last.t.subtract(const Duration(hours: 12));
-          endTime = points.last.t;
+          startTime = minT;
+          endTime = maxT;
+          // Start with 'All' to ensure visibility by default
+          currentMetric = 'All';
           isLoading = false;
         });
         _updateGridAndValues();
+        // Fallback: if grid looks empty, try metric 'pH' then 'All' with full range again
+        if (!_hasFinite(gridData)) {
+          setState(() { currentMetric = 'pH'; });
+          _updateGridAndValues();
+          if (!_hasFinite(gridData)) {
+            setState(() { currentMetric = 'All'; startTime = minT; endTime = maxT; });
+            _updateGridAndValues();
+          }
+        }
       } else {
         // Ensure spinner clears even when dataset is empty
         setState(() {
@@ -115,6 +129,16 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
         maxValue = 1;
       });
     }
+  }
+
+  bool _hasFinite(List<List<double>>? grid) {
+    if (grid == null || grid.isEmpty || grid.first.isEmpty) return false;
+    for (final row in grid) {
+      for (final v in row) {
+        if (v.isFinite) return true;
+      }
+    }
+    return false;
   }
 
   void _onMetricChanged(String newMetric) {
