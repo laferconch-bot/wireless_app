@@ -32,10 +32,18 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   double minValue = 0.0;
   double maxValue = 0.0;
   String? gltfModelPath;
+  // When true, the heatmap will not attempt to load any data
+  final bool heatmapDisabled = true;
 
   @override
   void initState() {
     super.initState();
+    if (heatmapDisabled) {
+      // Do not attempt to load data; ensure UI is not stuck on a spinner
+      isLoading = false;
+      gridData = [];
+      return;
+    }
     _loadData();
   }
 
@@ -162,14 +170,23 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
         actions: [
           IconButton(
             icon: Icon(is3DView ? Icons.view_agenda : Icons.view_in_ar),
-            onPressed: _toggleView,
+            onPressed: heatmapDisabled ? null : _toggleView,
             tooltip: 'Toggle 2D/3D View',
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
+      body: heatmapDisabled
+          ? Center(
+              child: Text(
+                'Heatmap is disabled.',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            )
+          : isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
