@@ -266,6 +266,12 @@ class _Tri {
   _Tri(this.a, this.b, this.c, this.value, this.shade, this.depth);
 }
 
+class _Proj {
+  final Offset p;
+  final double depth;
+  const _Proj(this.p, this.depth);
+}
+
 class _Vec3 {
   final double x;
   final double y;
