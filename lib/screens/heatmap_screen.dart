@@ -179,7 +179,6 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           ar: false,
           disableZoom: false,
           exposure: 1.0,
-          style: const TextStyle(color: Colors.transparent),
           alt: 'Textured heatmap plane',
         );
       },
