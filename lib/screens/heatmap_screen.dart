@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/heatmap_service.dart';
+import '../services/heatmap_cache_service.dart';
 import '../widgets/heatmap_2d.dart';
 import '../widgets/heatmap_3d.dart';
 import '../widgets/heatmap_surface_3d.dart';
@@ -46,7 +47,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   Future<void> _loadData() async {
     try {
       // Use available default asset (lat/lon/timestamp grid)
-      final points = await HeatmapService.parseCsvAsset('assets/simulated_soil_square.csv');
+      final csvAssetPath = 'assets/simulated_soil_square.csv';
+      final points = await HeatmapService.parseCsvAsset(csvAssetPath);
       heatmapService.setPoints(points);
 
       if (!mounted) return;
@@ -64,6 +66,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
           isLoading = false;
         });
         _updateGridAndValues();
+        // After grid computed, auto-generate PNG for default metric if missing
+        await _ensurePngForCurrent(csvAssetPath);
         // Fallback: if grid looks empty, try metric 'pH' then 'All' with full range again
         if (!_hasFinite(gridData)) {
           setState(() { currentMetric = 'pH'; });
@@ -134,6 +138,29 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     }
   }
 
+  Future<void> _ensurePngForCurrent(String csvKeySource) async {
+    try {
+      if (gridData == null || gridData!.isEmpty) return;
+      // Create a stable key from CSV content + metric
+      // If asset: read as string; if file later, read the file contents
+      final csvContent = await DefaultAssetBundle.of(context).loadString(csvKeySource);
+      final key = HeatmapCacheService.buildKey(csvContent: csvContent, metric: currentMetric);
+      final exists = await HeatmapCacheService.existsPng(key);
+      if (!exists) {
+        final img = await renderHeatmapImage(
+          grid: gridData!,
+          metricLabel: currentMetric,
+          minValue: minValue,
+          maxValue: maxValue,
+          cellSize: 24,
+        );
+        await HeatmapCacheService.writePng(key, img);
+      }
+    } catch (_) {
+      // Ignore caching errors silently for now
+    }
+  }
+
   bool _hasFinite(List<List<double>>? grid) {
     if (grid == null || grid.isEmpty || grid.first.isEmpty) return false;
     for (final row in grid) {
@@ -149,6 +176,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       currentMetric = newMetric;
     });
     _updateGridAndValues();
+    // Try generating PNG for this metric in background
+    unawaited(_ensurePngForCurrent('assets/simulated_soil_square.csv'));
   }
 
   Future<void> _selectDateRange() async {
