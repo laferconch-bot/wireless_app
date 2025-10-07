@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:three_dart/three_dart.dart' as three;
-import 'package:three_dart_jsm/controls/OrbitControls.dart' as jsm;
 import '../services/heatmap_service.dart';
 
 class Heatmap3DGL extends StatefulWidget {
@@ -28,7 +28,10 @@ class _Heatmap3DGLState extends State<Heatmap3DGL> {
   three.WebGLRenderer? _renderer;
   three.Scene? _scene;
   three.PerspectiveCamera? _camera;
-  jsm.OrbitControls? _controls;
+  // Simple orbit params
+  double _yaw = 0.6; // radians
+  double _pitch = 0.5; // radians
+  double _distance = 24.0;
   three.Object3D? _heatmapObject;
   Size _lastSize = Size.zero;
   double _dpr = 1.0;
@@ -37,7 +40,6 @@ class _Heatmap3DGLState extends State<Heatmap3DGL> {
   @override
   void dispose() {
     _disposed = true;
-    _controls?.dispose();
     _gl?.dispose();
     super.dispose();
   }
@@ -87,9 +89,7 @@ class _Heatmap3DGLState extends State<Heatmap3DGL> {
     _camera = three.PerspectiveCamera(45, size.width / size.height, 0.1, 1000);
     _camera!.position.setValues(10, 12, 16);
 
-    _controls = jsm.OrbitControls(_camera, _gl!.element);
-    _controls!.enableDamping = true;
-    _controls!.target.setValues(0, 0, 0);
+    _updateCameraTransform();
 
     // Lights
     final ambient = three.AmbientLight(three.Color.fromHex(0xffffff), 0.8);
@@ -189,7 +189,6 @@ class _Heatmap3DGLState extends State<Heatmap3DGL> {
 
   void _render() {
     if (_disposed || _renderer == null || _scene == null || _camera == null) return;
-    _controls?.update();
     _renderer!.render(_scene!, _camera!);
     _gl?.gl.flush();
   }
@@ -213,8 +212,34 @@ class _Heatmap3DGLState extends State<Heatmap3DGL> {
         if (_gl == null || _gl!.textureId == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        return Texture(textureId: _gl!.textureId!);
+        return GestureDetector(
+          onScaleStart: (details) {},
+          onScaleUpdate: (details) {
+            // Pinch to zoom
+            if (details.scale != 1.0) {
+              _distance = (_distance / details.scale).clamp(6.0, 80.0);
+            }
+            // Drag to orbit
+            final delta = details.focalPointDelta;
+            _yaw -= delta.dx * 0.005;
+            _pitch -= delta.dy * 0.005;
+            _pitch = _pitch.clamp(0.05, 1.4);
+            _updateCameraTransform();
+            setState(() {});
+          },
+          child: Texture(textureId: _gl!.textureId!),
+        );
       },
     );
+  }
+
+  void _updateCameraTransform() {
+    if (_camera == null) return;
+    final target = three.Vector3(0, 0, 0);
+    final x = _distance * math.sin(_yaw) * math.cos(_pitch);
+    final y = _distance * math.sin(_pitch);
+    final z = _distance * math.cos(_yaw) * math.cos(_pitch);
+    _camera!.position.setValues(x, y, z);
+    _camera!.lookAt(target);
   }
 }
