@@ -18,10 +18,7 @@ dependencies:
   csv: ^6.0.0
   file_picker: ^8.0.5
   intl: ^0.19.0
-  flutter_gl: ^0.9.2
-  three_dart:
-    git:
-      url: https://github.com/almin-li/three_dart.git
+  # flutter_gl and three_dart removed due to unavailable versions
 
 
 dev_dependencies:

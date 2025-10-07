@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../services/heatmap_service.dart';
 import '../widgets/heatmap_2d.dart';
 import '../widgets/heatmap_3d.dart';
-import '../widgets/heatmap_3d_gl.dart';
 
 class HeatmapScreen extends StatefulWidget {
   const HeatmapScreen({super.key});
@@ -232,7 +231,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                   Expanded(
                     child: (gridData != null && gridData!.isNotEmpty)
                         ? (is3DView
-                            ? Heatmap3DGL(
+                            ? Heatmap3D(
                                 grid: gridData!,
                                 metricLabel: currentMetric,
                                 minValue: minValue,
