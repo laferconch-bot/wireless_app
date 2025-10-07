@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/heatmap_service.dart';
 import '../services/heatmap_cache_service.dart';
+import '../services/csv_service.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import '../widgets/heatmap_2d.dart';
 import '../widgets/heatmap_3d.dart';
 import '../widgets/heatmap_surface_3d.dart';
@@ -46,11 +48,54 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     _loadData();
   }
 
+  List<HeatmapPoint> _pointsFromParsed(Map<String, List<dynamic>> parsed) {
+    final timestamps = parsed['timestamps']?.cast<DateTime>() ?? <DateTime>[];
+    final lats = parsed['latitudes']?.cast<double>() ?? <double>[];
+    final lons = parsed['longitudes']?.cast<double>() ?? <double>[];
+    if (timestamps.isEmpty || lats.isEmpty || lons.isEmpty) return [];
+
+    // Map unique lat/lon to grid indices
+    final uniqueLats = lats.toSet().toList()..sort();
+    final uniqueLons = lons.toSet().toList()..sort();
+    final latToY = {for (int i = 0; i < uniqueLats.length; i++) uniqueLats[i]: i};
+    final lonToX = {for (int i = 0; i < uniqueLons.length; i++) uniqueLons[i]: i};
+
+    List<HeatmapPoint> pts = [];
+    for (int i = 0; i < timestamps.length; i++) {
+      final t = timestamps[i];
+      final lat = lats[i];
+      final lon = lons[i];
+      if (t == null || lat.isNaN || lon.isNaN) continue;
+      final metrics = <String, double>{
+        'pH': (parsed['pH']?[i] as double?) ?? double.nan,
+        'Temperature': (parsed['temperature']?[i] as double?)?.toDouble() ?? double.nan,
+        'Humidity': (parsed['humidity']?[i] as double?)?.toDouble() ?? double.nan,
+        'EC': (parsed['ec']?[i] as double?)?.toDouble() ?? double.nan,
+        'N': (parsed['N']?[i] as double?)?.toDouble() ?? double.nan,
+        'P': (parsed['P']?[i] as double?)?.toDouble() ?? double.nan,
+        'K': (parsed['K']?[i] as double?)?.toDouble() ?? double.nan,
+      };
+      pts.add(HeatmapPoint(
+        x: lonToX[lon] ?? 0,
+        y: latToY[lat] ?? 0,
+        t: t,
+        metrics: metrics,
+      ));
+    }
+    return pts;
+  }
+
   Future<void> _loadData() async {
     try {
       // Use available default asset (lat/lon/timestamp grid)
       final csvAssetPath = 'assets/simulated_soil_square.csv';
-      final points = await HeatmapService.parseCsvAsset(csvAssetPath);
+      List<HeatmapPoint> points = await HeatmapService.parseCsvAsset(csvAssetPath);
+      // Fallback parse route if primary returns empty
+      if (points.isEmpty) {
+        final csvString = await rootBundle.loadString(csvAssetPath);
+        final parsed = await CSVService.parseCSV(csvString);
+        points = _pointsFromParsed(parsed);
+      }
       heatmapService.setPoints(points);
 
       if (!mounted) return;
