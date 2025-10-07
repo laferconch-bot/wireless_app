@@ -32,20 +32,10 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   double minValue = 0.0;
   double maxValue = 0.0;
   String? gltfModelPath;
-  // Heatmap is enabled by default
-  final bool heatmapDisabled = false;
 
   @override
   void initState() {
     super.initState();
-    if (heatmapDisabled) {
-      // If ever disabled, show a non-loading placeholder
-      setState(() {
-        isLoading = false;
-        gridData = [];
-      });
-      return;
-    }
     _loadData();
   }
 
@@ -180,7 +170,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
         actions: [
           IconButton(
             icon: Icon(is3DView ? Icons.view_agenda : Icons.view_in_ar),
-            onPressed: heatmapDisabled ? null : _toggleView,
+            onPressed: _toggleView,
             tooltip: 'Toggle 2D/3D View',
           ),
         ],
