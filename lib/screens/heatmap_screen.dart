@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/heatmap_service.dart';
 import '../widgets/heatmap_2d.dart';
 import '../widgets/heatmap_3d.dart';
@@ -272,6 +275,50 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                             child: Text("No data to display for the selected metric and time range."),
                           ),
                   ),
+                  const SizedBox(height: 12),
+                  if (!is3DView && (gridData != null && gridData!.isNotEmpty))
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.download),
+                      label: const Text('Export heatmap PNG'),
+                      onPressed: () async {
+                        try {
+                          final img = await renderHeatmapImage(
+                            grid: gridData!,
+                            metricLabel: currentMetric,
+                            minValue: minValue,
+                            maxValue: maxValue,
+                            cellSize: 16,
+                            showGridLines: false,
+                          );
+                          final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+                          if (bytes != null) {
+                            final dir = await getApplicationDocumentsDirectory();
+                            final safeMetric = currentMetric.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+                            final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+                            final path = '${dir.path}/heatmap_${safeMetric}_$timestamp.png';
+                            final file = File(path);
+                            await file.writeAsBytes(bytes.buffer.asUint8List());
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Saved PNG: $path')),
+                              );
+                            }
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Failed to encode PNG bytes')),
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to render PNG: $e')),
+                            );
+                          }
+                        }
+                      },
+                    ),
                 ],
               ),
             ),
