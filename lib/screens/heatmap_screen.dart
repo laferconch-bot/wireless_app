@@ -8,6 +8,8 @@ import '../services/heatmap_cache_service.dart';
 import '../widgets/heatmap_2d.dart';
 import '../widgets/heatmap_3d.dart';
 import '../widgets/heatmap_surface_3d.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
+import '../services/gltf_service.dart';
 
 class HeatmapScreen extends StatefulWidget {
   const HeatmapScreen({super.key});
@@ -161,6 +163,52 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     }
   }
 
+  Widget _buildTexturedPlaneViewer() {
+    // Build/locate PNG for current metric and return a model-viewer with a plane textured by it
+    return FutureBuilder<String>(
+      future: _buildOrGetGltfDataUriForCurrent(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final uri = snapshot.data!;
+        return ModelViewer(
+          src: uri,
+          cameraControls: true,
+          autoRotate: false,
+          ar: false,
+          disableZoom: false,
+          exposure: 1.0,
+          style: const TextStyle(color: Colors.transparent),
+          alt: 'Textured heatmap plane',
+        );
+      },
+    );
+  }
+
+  Future<String> _buildOrGetGltfDataUriForCurrent() async {
+    // Ensure PNG exists
+    final csv = await DefaultAssetBundle.of(context).loadString('assets/simulated_soil_square.csv');
+    final key = HeatmapCacheService.buildKey(csvContent: csv, metric: currentMetric);
+    if (!await HeatmapCacheService.existsPng(key)) {
+      if (gridData != null && gridData!.isNotEmpty) {
+        final img = await renderHeatmapImage(
+          grid: gridData!,
+          metricLabel: currentMetric,
+          minValue: minValue,
+          maxValue: maxValue,
+          cellSize: 24,
+        );
+        await HeatmapCacheService.writePng(key, img);
+      }
+    }
+    // Read PNG and embed in glTF JSON (data URIs)
+    final pngFile = await HeatmapCacheService.getPngFile(key);
+    final bytes = await pngFile.readAsBytes();
+    final json = GltfService.buildTexturedPlaneGltfJson(bytes);
+    return GltfService.gltfJsonToDataUri(json);
+  }
+
   bool _hasFinite(List<List<double>>? grid) {
     if (grid == null || grid.isEmpty || grid.first.isEmpty) return false;
     for (final row in grid) {
@@ -288,12 +336,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                   Expanded(
                     child: (gridData != null && gridData!.isNotEmpty)
                         ? (is3DView
-                            ? HeatmapSurface3D(
-                                grid: gridData!,
-                                metricLabel: currentMetric,
-                                minValue: minValue,
-                                maxValue: maxValue,
-                              )
+                            ? _buildTexturedPlaneViewer()
                             : Heatmap2D(
                                 grid: gridData!,
                                 metricLabel: currentMetric,
