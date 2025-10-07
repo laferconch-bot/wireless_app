@@ -13,7 +13,8 @@ class GraphScreen extends StatefulWidget {
 }
 
 class _GraphScreenState extends State<GraphScreen> {
-  double zoomLevel = 1;
+  // Start more zoomed-in by default to avoid clutter.
+  double zoomLevel = 3;
   int scrollIndex = 0;
 
   void zoomIn() => setState(() { if (zoomLevel < 5) zoomLevel += 1; });

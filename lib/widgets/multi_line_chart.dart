@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class MultiLineChartWidget extends StatelessWidget {
   final List<double> pHData;
@@ -84,6 +85,16 @@ class MultiLineChartWidget extends StatelessWidget {
       maxY += padding;
     }
 
+    // Build date title: single date or date range for visible segment
+    final DateFormat dateFmt = DateFormat('MMM d, yyyy');
+    final DateFormat timeFmt = DateFormat('HH:mm');
+    final String dateTitle = shownTimestamps.isEmpty
+        ? ''
+        : (DateTime(shownTimestamps.first.year, shownTimestamps.first.month, shownTimestamps.first.day) ==
+                DateTime(shownTimestamps.last.year, shownTimestamps.last.month, shownTimestamps.last.day)
+            ? dateFmt.format(shownTimestamps.first)
+            : "${dateFmt.format(shownTimestamps.first)} – ${dateFmt.format(shownTimestamps.last)}");
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenHeight = MediaQuery.of(context).size.height;
@@ -101,6 +112,16 @@ class MultiLineChartWidget extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (dateTitle.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        dateTitle,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: axisColor),
+                      ),
+                    ),
+                  ],
                   SizedBox(
                     height: chartHeight,
                     child: Card(
@@ -133,10 +154,11 @@ class MultiLineChartWidget extends StatelessWidget {
                                     if (index < 0 || index >= shownTimestamps.length) {
                                       return const SizedBox.shrink();
                                     }
-                                    return Text(
-                                      "${shownTimestamps[index].month}/${shownTimestamps[index].day}",
-                                      style: TextStyle(fontSize: 10, color: axisColor),
-                                    );
+                                  final dt = shownTimestamps[index];
+                                  return Text(
+                                    timeFmt.format(dt),
+                                    style: TextStyle(fontSize: 10, color: axisColor),
+                                  );
                                   },
                                 ),
                               ),
