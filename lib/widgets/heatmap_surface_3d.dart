@@ -1,7 +1,8 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/heatmap_service.dart';
 
-class HeatmapSurface3D extends StatelessWidget {
+class HeatmapSurface3D extends StatefulWidget {
   final List<List<double>> grid;
   final String metricLabel;
   final double minValue;
@@ -16,18 +17,57 @@ class HeatmapSurface3D extends StatelessWidget {
   });
 
   @override
+  State<HeatmapSurface3D> createState() => _HeatmapSurface3DState();
+}
+
+class _HeatmapSurface3DState extends State<HeatmapSurface3D> {
+  double _yaw = 0.7;   // rotation around vertical axis (radians)
+  double _pitch = 0.6; // tilt (radians)
+  double _zoom = 1.0;  // scale factor
+  double _startZoom = 1.0;
+
+  void _resetView() {
+    setState(() {
+      _yaw = 0.7;
+      _pitch = 0.6;
+      _zoom = 1.0;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
-        return CustomPaint(
-          size: Size(constraints.maxWidth, constraints.maxHeight),
-          painter: _SurfacePainter(
-            grid: grid,
-            metricLabel: metricLabel,
-            minValue: minValue,
-            maxValue: maxValue,
-            isDark: isDark,
+        return GestureDetector(
+          onDoubleTap: _resetView,
+          onScaleStart: (details) {
+            _startZoom = _zoom;
+          },
+          onScaleUpdate: (details) {
+            // Pinch to zoom (relative to scale start)
+            final newZoom = (_startZoom * details.scale).clamp(0.5, 3.0);
+            // Drag to orbit
+            final delta = details.focalPointDelta;
+            setState(() {
+              _zoom = newZoom;
+              _yaw -= delta.dx * 0.007;
+              _pitch -= delta.dy * 0.007;
+              _pitch = _pitch.clamp(0.1, 1.4);
+            });
+          },
+          child: CustomPaint(
+            size: Size(constraints.maxWidth, constraints.maxHeight),
+            painter: _SurfacePainter(
+              grid: widget.grid,
+              metricLabel: widget.metricLabel,
+              minValue: widget.minValue,
+              maxValue: widget.maxValue,
+              isDark: isDark,
+              yaw: _yaw,
+              pitch: _pitch,
+              zoom: _zoom,
+            ),
           ),
         );
       },
@@ -41,6 +81,9 @@ class _SurfacePainter extends CustomPainter {
   final double minValue;
   final double maxValue;
   final bool isDark;
+  final double yaw;
+  final double pitch;
+  final double zoom;
 
   _SurfacePainter({
     required this.grid,
@@ -48,6 +91,9 @@ class _SurfacePainter extends CustomPainter {
     required this.minValue,
     required this.maxValue,
     required this.isDark,
+    required this.yaw,
+    required this.pitch,
+    required this.zoom,
   });
 
   @override
@@ -56,77 +102,90 @@ class _SurfacePainter extends CustomPainter {
 
     final int rows = grid.length;
     final int cols = grid[0].length;
-
     final double safeRange = (maxValue - minValue).abs() < 1e-12 ? 1.0 : (maxValue - minValue);
 
-    // Isometric-like projection parameters
-    final double cell = size.width / (cols + rows + 2);
-    final double cellX = cell * 0.866; // cos 30°
-    final double cellY = cell * 0.5;   // sin 30°
-    final double heightScale = cell * 1.0;
-    final Offset origin = Offset(size.width * 0.5, size.height * 0.2);
+    // World units and camera
+    final double unit = (math.min(size.width, size.height) * 0.9) / math.max(cols, rows);
+    final double heightScale = unit * 0.7;
+    final Offset center = Offset(size.width * 0.5, size.height * 0.55);
 
-    // Precompute vertex screen positions and world heights
-    final List<List<Offset?>> screenPos = List.generate(rows, (_) => List.filled(cols, null));
-    final List<List<double>> worldHeights = List.generate(rows, (_) => List.filled(cols, 0.0));
+    final double cx = (cols - 1) / 2.0;
+    final double cz = (rows - 1) / 2.0;
+
+    final double cosY = math.cos(yaw), sinY = math.sin(yaw);
+    final double cosX = math.cos(pitch), sinX = math.sin(pitch);
+
+    // Precompute rotated + projected positions and normalized heights (for shading)
+    final List<List<_Proj?>> proj = List.generate(rows, (_) => List.filled(cols, null));
+    final List<List<double>> normH = List.generate(rows, (_) => List.filled(cols, 0.0));
 
     for (int r = 0; r < rows; r++) {
       for (int c = 0; c < cols; c++) {
         final v = grid[r][c];
         if (!v.isFinite) {
-          screenPos[r][c] = null;
-          worldHeights[r][c] = 0.0;
+          proj[r][c] = null;
+          normH[r][c] = 0.0;
           continue;
         }
         final t = ((v - minValue) / safeRange).clamp(0.0, 1.0);
-        final double h = t * heightScale; // screen height shift
-        worldHeights[r][c] = t; // use normalized for world normal calc
-        final double sx = (c - r) * cellX;
-        final double sy = (c + r) * cellY - h;
-        screenPos[r][c] = origin + Offset(sx, sy);
+        normH[r][c] = t;
+        // Model space (centered)
+        final double x = (c - cx) * unit;
+        final double z = (r - cz) * unit;
+        final double y = t * heightScale;
+        // Rotate around Y (yaw)
+        final double x1 = cosY * x + sinY * z;
+        final double z1 = -sinY * x + cosY * z;
+        // Rotate around X (pitch)
+        final double y2 = cosX * y - sinX * z1;
+        final double z2 = sinX * y + cosX * z1;
+        // Orthographic projection with zoom
+        final Offset p = center + Offset(zoom * x1, -zoom * y2);
+        proj[r][c] = _Proj(p, z2);
       }
     }
 
-    // Build triangles and sort back-to-front by (r+c) depth heuristic
+    // Build triangles and sort by depth (back-to-front)
     final List<_Tri> tris = [];
     for (int r = 0; r < rows - 1; r++) {
       for (int c = 0; c < cols - 1; c++) {
-        final p00 = screenPos[r][c];
-        final p10 = screenPos[r][c + 1];
-        final p01 = screenPos[r + 1][c];
-        final p11 = screenPos[r + 1][c + 1];
+        final a = proj[r][c];
+        final b = proj[r][c + 1];
+        final d = proj[r + 1][c];
+        final e = proj[r + 1][c + 1];
 
         final v00 = grid[r][c];
         final v10 = grid[r][c + 1];
         final v01 = grid[r + 1][c];
         final v11 = grid[r + 1][c + 1];
 
-        final h00 = worldHeights[r][c];
-        final h10 = worldHeights[r][c + 1];
-        final h01 = worldHeights[r + 1][c];
-        final h11 = worldHeights[r + 1][c + 1];
+        final h00 = normH[r][c];
+        final h10 = normH[r][c + 1];
+        final h01 = normH[r + 1][c];
+        final h11 = normH[r + 1][c + 1];
 
-        // skip if triangle has any missing points
-        if (p00 != null && p10 != null && p01 != null) {
-          final colorVal = _avgFinite([v00, v10, v01]);
-          if (colorVal != null) {
+        if (a != null && b != null && d != null) {
+          final avgVal = _avgFinite([v00, v10, v01]);
+          if (avgVal != null) {
             final shade = _computeShade([
-              _Vec3(c.toDouble(), h00, r.toDouble()),
-              _Vec3((c + 1).toDouble(), h10, r.toDouble()),
-              _Vec3(c.toDouble(), h01, (r + 1).toDouble()),
+              _Vec3((c - cx), h00, (r - cz)),
+              _Vec3((c + 1 - cx), h10, (r - cz)),
+              _Vec3((c - cx), h01, (r + 1 - cz)),
             ]);
-            tris.add(_Tri(p00, p10, p01, colorVal, shade, r + c + 0.0));
+            final depth = (a.depth + b.depth + d.depth) / 3.0;
+            tris.add(_Tri(a.p, b.p, d.p, avgVal, shade, depth));
           }
         }
-        if (p11 != null && p01 != null && p10 != null) {
-          final colorVal = _avgFinite([v11, v01, v10]);
-          if (colorVal != null) {
+        if (e != null && d != null && b != null) {
+          final avgVal = _avgFinite([v11, v01, v10]);
+          if (avgVal != null) {
             final shade = _computeShade([
-              _Vec3((c + 1).toDouble(), h11, (r + 1).toDouble()),
-              _Vec3(c.toDouble(), h01, (r + 1).toDouble()),
-              _Vec3((c + 1).toDouble(), h10, r.toDouble()),
+              _Vec3((c + 1 - cx), h11, (r + 1 - cz)),
+              _Vec3((c - cx), h01, (r + 1 - cz)),
+              _Vec3((c + 1 - cx), h10, (r - cz)),
             ]);
-            tris.add(_Tri(p11, p01, p10, colorVal, shade, r + c + 0.2));
+            final depth = (e.depth + d.depth + b.depth) / 3.0;
+            tris.add(_Tri(e.p, d.p, b.p, avgVal, shade, depth));
           }
         }
       }
