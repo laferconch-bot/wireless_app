@@ -41,13 +41,14 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
 
   Future<void> _loadData() async {
     try {
-      final points = await HeatmapService.parseCsvAsset('assets/heatmap_data.csv');
+      // Use available default asset (lat/lon/timestamp grid)
+      final points = await HeatmapService.parseCsvAsset('assets/simulated_soil_square.csv');
       heatmapService.setPoints(points);
 
       if (points.isNotEmpty) {
         setState(() {
-          // Set initial timeline to the full range of the data
-          startTime = points.first.t;
+          // Set initial timeline to a recent, tighter window for better visibility
+          startTime = points.last.t.subtract(const Duration(hours: 12));
           endTime = points.last.t;
           isLoading = false;
         });
@@ -146,11 +147,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       is3DView = !is3DView;
     });
 
-    if (is3DView) {
-      gltfModelPath = 'assets/simulated_3d_model.gltf';
-    } else {
-      gltfModelPath = null;
-    }
+    // In this app we render 3D with a custom painter instead of glTF assets
+    gltfModelPath = null;
   }
 
   @override
@@ -217,23 +215,18 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: is3DView
-                        ? const Center(
-                            child: Text(
-                              "A functional 3D viewer is not supported in this environment.",
-                              textAlign: TextAlign.center,
-                            ),
-                          )
-                        : (gridData != null && gridData!.isNotEmpty)
-                            ? Heatmap2D(
+                    child: (gridData != null && gridData!.isNotEmpty)
+                        ? (is3DView
+                            ? Heatmap3D(grid: gridData!, metricLabel: currentMetric, minValue: minValue, maxValue: maxValue)
+                            : Heatmap2D(
                                 grid: gridData!,
                                 metricLabel: currentMetric,
                                 minValue: minValue,
                                 maxValue: maxValue,
-                              )
-                            : const Center(
-                                child: Text("No data to display for the selected metric and time range."),
-                              ),
+                              ))
+                        : const Center(
+                            child: Text("No data to display for the selected metric and time range."),
+                          ),
                   ),
                 ],
               ),

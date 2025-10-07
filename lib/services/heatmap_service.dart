@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'dart:math';
+import 'package:intl/intl.dart';
 
 // A single data point
 class HeatmapPoint {
@@ -35,37 +36,145 @@ class HeatmapService {
     final rawData = await rootBundle.loadString(path);
     final parser = const CsvToListConverter();
     final List<List<dynamic>> csvTable = parser.convert(rawData);
-    
-    final header = csvTable[0].map((e) => e.toString()).toList();
-    final List<HeatmapPoint> points = [];
 
-    // Map column names to indices
-    final xIndex = header.indexOf('x');
-    final yIndex = header.indexOf('y');
-    final tIndex = header.indexOf('t');
+    if (csvTable.isEmpty) return [];
 
-    if (xIndex == -1 || yIndex == -1 || tIndex == -1) {
-      throw Exception("CSV file must contain 'x', 'y', and 't' columns.");
+    final header = csvTable.first.map((e) => e.toString()).toList();
+    final lowerHeader = header.map((e) => e.trim().toLowerCase()).toList();
+
+    // Detect coordinate/time columns (support x,y,t or timestamp,lat,lon)
+    final xIndex = lowerHeader.indexOf('x');
+    final yIndex = lowerHeader.indexOf('y');
+    final tIndex = lowerHeader.indexOf('t');
+
+    final timestampIndex = lowerHeader.indexOf('timestamp');
+    final latIndex = lowerHeader.indexOf('lat');
+    final lonIndex = lowerHeader.indexOf('lon');
+
+    final bool useXY = xIndex != -1 && yIndex != -1 && (tIndex != -1 || timestampIndex != -1);
+    final bool useLatLon = latIndex != -1 && lonIndex != -1 && timestampIndex != -1;
+
+    if (!useXY && !useLatLon) {
+      throw Exception("CSV must contain either (x,y,t) or (timestamp,lat,lon) columns.");
     }
 
-    final metricNames = header.sublist(tIndex + 1);
-
-    for (var i = 1; i < csvTable.length; i++) {
-      final row = csvTable[i];
-      final metrics = <String, double>{};
-      
-      for (var j = 0; j < metricNames.length; j++) {
-        metrics[metricNames[j]] = row[tIndex + 1 + j].toDouble();
+    // Identify metric columns and normalize display names
+    final Map<int, String> metricIndexToName = {};
+    for (int i = 0; i < header.length; i++) {
+      if (useXY) {
+        if (i == xIndex || i == yIndex || i == (tIndex != -1 ? tIndex : timestampIndex)) continue;
       }
-
-      points.add(HeatmapPoint(
-        x: row[xIndex],
-        y: row[yIndex],
-        t: DateTime.parse(row[tIndex]),
-        metrics: metrics,
-      ));
+      if (useLatLon) {
+        if (i == latIndex || i == lonIndex || i == timestampIndex) continue;
+      }
+      final key = lowerHeader[i];
+      // Map common header keys to user-facing metric labels
+      String display;
+      switch (key) {
+        case 'ph':
+          display = 'pH';
+          break;
+        case 'temperature':
+          display = 'Temperature';
+          break;
+        case 'humidity':
+          display = 'Humidity';
+          break;
+        case 'ec':
+          display = 'EC';
+          break;
+        case 'n':
+          display = 'N';
+          break;
+        case 'p':
+          display = 'P';
+          break;
+        case 'k':
+          display = 'K';
+          break;
+        default:
+          // Keep original if unknown
+          display = header[i];
+      }
+      metricIndexToName[i] = display;
     }
-    return points;
+
+    // Helper parsers
+    double _toDouble(dynamic v) {
+      if (v == null) return double.nan;
+      if (v is num) return v.toDouble();
+      final s = v.toString().trim();
+      if (s.isEmpty) return double.nan;
+      return double.tryParse(s) ?? double.nan;
+    }
+
+    DateTime _parseDate(dynamic v) {
+      final s = v.toString().trim();
+      try {
+        return DateTime.parse(s);
+      } catch (_) {
+        // Try common format
+        try {
+          return DateFormat('yyyy-MM-dd HH:mm:ss').parse(s, true).toLocal();
+        } catch (e) {
+          throw Exception("Unable to parse date: $s");
+        }
+      }
+    }
+
+    // First pass: collect raw rows
+    final List<_RawPoint> raw = [];
+    for (int i = 1; i < csvTable.length; i++) {
+      final row = csvTable[i];
+      if (row.isEmpty) continue;
+
+      final DateTime t = _parseDate(row[useXY ? (tIndex != -1 ? tIndex : timestampIndex) : timestampIndex]);
+      final Map<String, double> metrics = {};
+      metricIndexToName.forEach((col, name) {
+        metrics[name] = _toDouble(row[col]);
+      });
+
+      if (useXY) {
+        raw.add(_RawPoint(
+          x: (row[xIndex] as num).toInt(),
+          y: (row[yIndex] as num).toInt(),
+          t: t,
+          metrics: metrics,
+        ));
+      } else {
+        raw.add(_RawPoint(
+          lat: _toDouble(row[latIndex]),
+          lon: _toDouble(row[lonIndex]),
+          t: t,
+          metrics: metrics,
+        ));
+      }
+    }
+
+    if (raw.isEmpty) return [];
+
+    // If using lat/lon, map to grid indices by sorting unique values
+    if (useLatLon) {
+      final uniqueLats = raw.map((r) => r.lat!).toSet().toList()..sort();
+      final uniqueLons = raw.map((r) => r.lon!).toSet().toList()..sort();
+      final Map<double, int> latToY = { for (int i = 0; i < uniqueLats.length; i++) uniqueLats[i] : i };
+      final Map<double, int> lonToX = { for (int i = 0; i < uniqueLons.length; i++) uniqueLons[i] : i };
+
+      return raw.map((r) => HeatmapPoint(
+        x: lonToX[r.lon]!,
+        y: latToY[r.lat]!,
+        t: r.t,
+        metrics: r.metrics,
+      )).toList();
+    }
+
+    // Already x/y
+    return raw.map((r) => HeatmapPoint(
+      x: r.x!,
+      y: r.y!,
+      t: r.t,
+      metrics: r.metrics,
+    )).toList();
   }
 
   // Create a grid from the data points
@@ -83,7 +192,7 @@ class HeatmapService {
     final filteredPoints = points.where((p) =>
         (p.t.isAfter(start) || p.t.isAtSameMomentAs(start)) &&
         (p.t.isBefore(end) || p.t.isAtSameMomentAs(end)) &&
-        p.metrics.containsKey(metric)).toList();
+        (metric == 'All' || p.metrics.containsKey(metric))).toList();
 
     if (filteredPoints.isEmpty) {
       return [
@@ -102,19 +211,41 @@ class HeatmapService {
       if (!combinedValues.containsKey(key)) {
         combinedValues[key] = [];
       }
-      combinedValues[key]!.add(p.metrics[metric]!);
+      if (metric == 'All') {
+        // Average across all metrics available for this point
+        final values = p.metrics.values.where((v) => v.isFinite).toList();
+        if (values.isNotEmpty) {
+          combinedValues[key]!.add(values.reduce((a, b) => a + b) / values.length);
+        }
+      } else {
+        final v = p.metrics[metric];
+        if (v != null && v.isFinite) combinedValues[key]!.add(v);
+      }
     }
 
     for (var entry in combinedValues.entries) {
       final parts = entry.key.split('_');
       final x = int.parse(parts[0]);
       final y = int.parse(parts[1]);
-      final avgValue = entry.value.reduce((a, b) => a + b) / entry.value.length;
-      grid[y][x] = avgValue;
+      if (entry.value.isNotEmpty) {
+        final avgValue = entry.value.reduce((a, b) => a + b) / entry.value.length;
+        grid[y][x] = avgValue;
+      }
     }
 
     return grid;
   }
+}
+
+class _RawPoint {
+  final int? x;
+  final int? y;
+  final double? lat;
+  final double? lon;
+  final DateTime t;
+  final Map<String, double> metrics;
+
+  _RawPoint({this.x, this.y, this.lat, this.lon, required this.t, required this.metrics});
 }
 
 // This map defines the "optimal" range for each metric for color scaling.
