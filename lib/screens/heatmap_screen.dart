@@ -40,25 +40,39 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   }
 
   Future<void> _loadData() async {
+    setState(() { isLoading = true; });
     try {
       // Use available default asset (lat/lon/timestamp grid)
       final points = await HeatmapService.parseCsvAsset('assets/simulated_soil_square.csv');
       heatmapService.setPoints(points);
 
       if (points.isNotEmpty) {
+        // Clamp to last 12 hours or full range if shorter
+        final earliest = points.first.t;
+        final latest = points.last.t;
+        DateTime proposedStart = latest.subtract(const Duration(hours: 12));
+        if (proposedStart.isBefore(earliest)) proposedStart = earliest;
+
+        if (!mounted) return;
         setState(() {
-          // Set initial timeline to a recent, tighter window for better visibility
-          startTime = points.last.t.subtract(const Duration(hours: 12));
-          endTime = points.last.t;
-          isLoading = false;
+          startTime = proposedStart;
+          endTime = latest;
         });
         _updateGridAndValues();
+      } else {
+        if (!mounted) return;
+        setState(() {
+          gridData = const [];
+          minValue = 0;
+          maxValue = 0;
+        });
       }
     } catch (e) {
-      print('Error loading data: $e');
-      setState(() {
-        isLoading = false;
-      });
+      debugPrint('Error loading data: $e');
+    } finally {
+      if (mounted) {
+        setState(() { isLoading = false; });
+      }
     }
   }
 
