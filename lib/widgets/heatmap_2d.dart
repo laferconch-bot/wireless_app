@@ -50,7 +50,7 @@ class Heatmap2D extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           SizedBox(
-            height: MediaQuery.of(context).size.height * 0.8,
+            height: double.infinity,
             width: 60,
             child: HeatmapLegend(
               minValue: minValue,

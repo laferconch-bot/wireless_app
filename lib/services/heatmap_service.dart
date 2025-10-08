@@ -271,8 +271,8 @@ class HeatmapService {
     // Determine resolution
     final uniqueLats = candidates.map((p) => p.lat!).toSet().toList()..sort();
     final uniqueLons = candidates.map((p) => p.lon!).toSet().toList()..sort();
-    final int cols = targetCols ?? uniqueLons.length;
-    final int rows = targetRows ?? uniqueLats.length;
+    final int cols = targetCols ?? max(16, min(128, uniqueLons.length * 4));
+    final int rows = targetRows ?? max(16, min(128, uniqueLats.length * 4));
     if (cols <= 0 || rows <= 0) {
       return [ [ double.nan ] ];
     }

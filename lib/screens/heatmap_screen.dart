@@ -336,6 +336,13 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
             onPressed: _toggleView,
             tooltip: 'Toggle 2D/3D View',
           ),
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Set image save directory',
+            onPressed: () async {
+              await _promptSaveDirectory(context);
+            },
+          ),
         ],
       ),
       body: isLoading
@@ -446,6 +453,39 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Future<void> _promptSaveDirectory(BuildContext context) async {
+    final controller = TextEditingController(
+      text: context.read<AppSettings>().saveDirectory,
+    );
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Set save directory'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              hintText: '/storage/emulated/0/Download',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                context.read<AppSettings>().setSaveDirectory(controller.text.trim());
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
