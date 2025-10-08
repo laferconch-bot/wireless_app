@@ -329,6 +329,14 @@ class HeatmapService {
     }
     return p.metrics[metric] ?? double.nan;
   }
+
+}
+
+class _Sample {
+  final double lat;
+  final double lon;
+  final double value;
+  const _Sample(this.lat, this.lon, this.value);
 }
 
 class _RawPoint {

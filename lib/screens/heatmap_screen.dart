@@ -12,6 +12,8 @@ import '../widgets/heatmap_3d.dart';
 import '../widgets/heatmap_surface_3d.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import '../services/gltf_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_settings.dart';
 
 class HeatmapScreen extends StatefulWidget {
   const HeatmapScreen({super.key});
