@@ -14,6 +14,7 @@ class CSVDataProvider extends ChangeNotifier {
   List<DateTime> timestamps = [];
   List<double> latitudes = [];
   List<double> longitudes = [];
+  List<String> plantStatus = [];
   String _sourceKey = '';
 
   String get sourceKey => _sourceKey;
@@ -29,6 +30,7 @@ class CSVDataProvider extends ChangeNotifier {
     required List<DateTime> timestamps,
     required List<double> latitudes,
     required List<double> longitudes,
+    List<String>? plantStatus,
   }) {
     this.pH = pH;
     this.temperature = temperature;
@@ -40,6 +42,7 @@ class CSVDataProvider extends ChangeNotifier {
     this.timestamps = timestamps;
     this.latitudes = latitudes;
     this.longitudes = longitudes;
+    this.plantStatus = plantStatus ?? [];
     _sourceKey = _computeDatasetHash();
     notifyListeners();
   }
@@ -58,6 +61,7 @@ class CSVDataProvider extends ChangeNotifier {
       n.map((v) => v.toString()).join(','),
       p.map((v) => v.toString()).join(','),
       k.map((v) => v.toString()).join(','),
+      plantStatus.join(','),
     ];
     final digest = sha1.convert(utf8.encode(parts.join('|'))).toString();
     return digest;
