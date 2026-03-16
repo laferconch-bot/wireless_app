@@ -5,9 +5,6 @@ import 'package:intl/intl.dart';
 
 class MultiLineChartWidget extends StatelessWidget {
   final List<double> pHData;
-  final List<double> nData;
-  final List<double> pData;
-  final List<double> kData;
   final List<double> temperatureData;
   final List<double> humidityData;
   final List<double> ecData;
@@ -21,9 +18,6 @@ class MultiLineChartWidget extends StatelessWidget {
   const MultiLineChartWidget({
     super.key,
     required this.pHData,
-    required this.nData,
-    required this.pData,
-    required this.kData,
     required this.temperatureData,
     required this.humidityData,
     required this.ecData,
@@ -54,23 +48,16 @@ class MultiLineChartWidget extends StatelessWidget {
     } else {
       lines = [
         _buildLine(pHData.sublist(start, end), Colors.green),
-        _buildLine(nData.sublist(start, end), Colors.blue),
-        _buildLine(pData.sublist(start, end), Colors.orange),
-        _buildLine(kData.sublist(start, end), Colors.purple),
         _buildLine(temperatureData.sublist(start, end), Colors.red),
         _buildLine(humidityData.sublist(start, end), Colors.cyan),
         _buildLine(ecData.sublist(start, end), Colors.indigo),
       ];
     }
 
-    // Derive global min/max across visible series for better scaling
     final List<List<double>> visibleSeries = combinedSeries != null
         ? [combinedSeries!.sublist(start, end)]
         : [
             pHData.sublist(start, end),
-            nData.sublist(start, end),
-            pData.sublist(start, end),
-            kData.sublist(start, end),
             temperatureData.sublist(start, end),
             humidityData.sublist(start, end),
             ecData.sublist(start, end),
@@ -97,7 +84,6 @@ class MultiLineChartWidget extends StatelessWidget {
       maxY += padding;
     }
 
-    // Build date title: single date or date range for visible segment
     final DateFormat dateFmt = DateFormat('MMM d, yyyy');
     final DateFormat timeFmt = DateFormat('HH:mm');
     final String dateTitle = shownTimestamps.isEmpty
@@ -154,24 +140,24 @@ class MultiLineChartWidget extends StatelessWidget {
                               getDrawingVerticalLine: (_) => FlLine(color: gridColor, strokeWidth: 0.6),
                             ),
                             titlesData: FlTitlesData(
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 24,
-                                interval: shownTimestamps.isEmpty ? 1 : (shownTimestamps.length <= 6 ? 1 : (shownTimestamps.length / 6).floorToDouble()),
-                                getTitlesWidget: (value, meta) {
-                                  int index = value.toInt();
-                                  if (index < 0 || index >= shownTimestamps.length) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final dt = shownTimestamps[index];
-                                  return Text(
-                                    timeFmt.format(dt),
-                                    style: TextStyle(fontSize: 10, color: axisColor),
-                                  );
-                                },
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 24,
+                                  interval: shownTimestamps.isEmpty ? 1 : (shownTimestamps.length <= 6 ? 1 : (shownTimestamps.length / 6).floorToDouble()),
+                                  getTitlesWidget: (value, meta) {
+                                    int index = value.toInt();
+                                    if (index < 0 || index >= shownTimestamps.length) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final dt = shownTimestamps[index];
+                                    return Text(
+                                      timeFmt.format(dt),
+                                      style: TextStyle(fontSize: 10, color: axisColor),
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
@@ -265,9 +251,6 @@ class _LegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     const items = <(Color, String)>[
       (Colors.green, 'pH'),
-      (Colors.blue, 'Nitrogen'),
-      (Colors.orange, 'Phosphorus'),
-      (Colors.purple, 'Potassium'),
       (Colors.red, 'Temperature'),
       (Colors.cyan, 'Humidity'),
       (Colors.indigo, 'EC'),
@@ -275,7 +258,7 @@ class _LegendRow extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxPerRow = constraints.maxWidth ~/ 180; // keep it compact
+        final maxPerRow = constraints.maxWidth ~/ 180;
         final rows = <List<(Color, String)>>[];
         var current = <(Color, String)>[];
         for (final item in items) {
