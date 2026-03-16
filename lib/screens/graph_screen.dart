@@ -55,11 +55,8 @@ class _GraphScreenState extends State<GraphScreen> {
       List<double> humidity,
       List<double> ec,
     ) {
-      final int len = [pH, temperature, humidity, ec]
-          .map((s) => s.length)
-          .fold<int>(0, (a, b) => a == 0 ? b : (a < b ? a : b));
+      final int len = [pH, temperature, humidity, ec].map((s) => s.length).fold<int>(0, (a, b) => a == 0 ? b : (a < b ? a : b));
       final List<double> out = List.filled(len, double.nan);
-
       double score(double value, double min, double max) {
         if (!value.isFinite) return double.nan;
         if (max <= min) return 1.0;
@@ -70,7 +67,6 @@ class _GraphScreenState extends State<GraphScreen> {
         final double s = 1.0 - (dist / (half * 2.0));
         return s.clamp(0.0, 1.0);
       }
-
       for (int i = 0; i < len; i++) {
         final vals = <double>[
           score(pH[i], 6.0, 7.5),
@@ -198,7 +194,6 @@ class _GraphScreenState extends State<GraphScreen> {
           ),
         ],
       );
-
       return widget.embedded
           ? content
           : Scaffold(
@@ -207,7 +202,7 @@ class _GraphScreenState extends State<GraphScreen> {
             );
     }
 
-    // Unfiltered path
+    // Unfiltered path: all runs
     final pHPerRun = RunSegmentationService.averagesForMetric(summaries, 'pH');
     final temperaturePerRun = RunSegmentationService.averagesForMetric(summaries, 'Temperature');
     final humidityPerRun = RunSegmentationService.averagesForMetric(summaries, 'Humidity');
