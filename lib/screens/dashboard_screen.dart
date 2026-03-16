@@ -1,14 +1,14 @@
-// Assuming this is the adjusted code
 import 'package:flutter/material.dart';
 
 class DashboardScreen extends StatelessWidget {
+  const DashboardScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Dashboard')), 
-      body: Column(
+      appBar: AppBar(title: const Text('Dashboard')),
+      body: const Column(
         children: <Widget>[
-          // Only displaying necessary metrics below
           MetricCard(title: 'pH', value: '6.0'),
           MetricCard(title: 'Temperature', value: '22°C'),
           MetricCard(title: 'Humidity', value: '50%'),
@@ -23,7 +23,7 @@ class MetricCard extends StatelessWidget {
   final String title;
   final String value;
 
-  MetricCard({required this.title, required this.value});
+  const MetricCard({super.key, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +32,9 @@ class MetricCard extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: <Widget>[
-            Text(title, style: TextStyle(fontSize: 20)),
-            SizedBox(height: 10),
-            Text(value, style: TextStyle(fontSize: 24)),
+            Text(title, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 10),
+            Text(value, style: const TextStyle(fontSize: 24)),
           ],
         ),
       ),
