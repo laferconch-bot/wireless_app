@@ -22,10 +22,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Defer theme rebuilding to AppSettings to allow persisted seed color & mode
     return Consumer<AppSettings>(
       builder: (context, settings, _) {
-        // Keep ValueNotifier in sync so existing toggles continue to work
         themeNotifier.value = settings.themeMode;
         final Color seed = settings.seedColor;
         final ThemeData light = ThemeData(
@@ -48,13 +46,12 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: Colors.black,
           appBarTheme: const AppBarTheme(backgroundColor: Colors.black, foregroundColor: Colors.white),
         );
-
         return MaterialApp(
           title: 'Soil Dashboard',
           theme: light,
           darkTheme: dark,
           themeMode: settings.themeMode,
-          home: const DashboardScreen(),
+          home: DashboardScreen(), // removed const
         );
       },
     );
